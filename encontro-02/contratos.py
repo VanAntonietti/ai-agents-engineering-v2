@@ -79,10 +79,26 @@ CONTRATOS = {
     # Sem o id na saída, o agente consegue citar a fonte?
     # ==================================================================
     "consultar_politica_rh": {
-        "descricao": "TODO 1",
-        "parametros": None,
-        "saida": None,
-    },
+            "descricao": (
+                "Busca nas políticas de RH da Aurora (férias, trabalho remoto, licenças, jornada, "
+                "integração). Use 'tema' se souber do que se trata, ou 'geral' para buscar em todas. "
+                "Devolve a página com o id para citar como fonte. "
+                "Não use para TI nem para regras/valores de benefícios (use consultar_regra_beneficio) "
+                "nem para elegibilidade individual (use verificar_elegibilidade_beneficio)."
+            ),
+            "parametros": {
+                        "type": "object",
+                        "properties": {
+                            "tema": {"type": "string", "enum": ["ferias", "trabalho_remoto", "licencas", "jornada", "integracao", "geral"],
+                                          "description": "O tema da política de RH consultada."},
+                            "pergunta": {"type": "string", "maxLength": 300,
+                                         "description": "A dúvida do colaborador, para destacar o trecho relevante."},
+                        },
+                        "required": ["pergunta"],
+                        "additionalProperties": False,
+                    },
+            "saida": ["id", "titulo", "tema", "atualizado_em", "trecho"],
+        },
 
     # ==================================================================
     # TODO 2 — abrir_chamado_ti
@@ -99,9 +115,29 @@ CONTRATOS = {
     # precisa saber do chamado aberto?
     # ==================================================================
     "abrir_chamado_ti": {
-        "descricao": "TODO 2",
-        "parametros": None,
-        "saida": None,
+        "descricao": (
+            "Cria um chamado no service desk de TI. AÇÃO DE ESCRITA: cada chamada cria um novo "
+            "chamado, mesmo repetindo os mesmos dados. Use só depois de buscar em buscar_base_ti e "
+            "confirmar que a base não resolve o problema, e quando o colaborador pediu (ou aceitou) "
+            "abrir o chamado. Não abra chamado para dúvidas que a base de conhecimento já responde "
+            "(ex.: instalar programa disponível na Central de Software). Use urgencia 'alta' quando "
+            "o colaborador ficou sem acesso a sistemas essenciais (ex.: perdeu o segundo fator, conta "
+            "bloqueada); 'media' é o padrão."
+        ),
+        "parametros": {
+                    "type": "object",
+                    "properties": {
+                        "categoria": {"type": "string", "enum": ["equipamento", "acesso", "software", "vpn", "outro"],
+                                        "description": "A categoria do chamado."},
+                        "descricao": {"type": "string", "minLength": 15, "maxLength": 300,
+                                        "description": "A descrição do problema relatado, com pelo menos 15 caracteres."},
+                        "urgencia": {"type": "string", "enum": ["baixa", "media", "alta"],
+                                        "description": "A urgência do chamado. Padrão: 'media'."},
+                    },
+                    "required": ["categoria", "descricao"],
+                    "additionalProperties": False,
+                },
+        "saida": ["id", "status", "categoria", "urgencia", "descricao", "prazo_atendimento", "grupo_resolvedor", "historico"],
     },
 
     # ==================================================================
@@ -119,9 +155,27 @@ CONTRATOS = {
     # Em que se diferencia de consultar_regra_beneficio?
     # ==================================================================
     "verificar_elegibilidade_beneficio": {
-        "descricao": "TODO 3",
-        "parametros": None,
-        "saida": None,
+        "descricao": (
+            "Lê o cadastro do colaborador no sistema de RH e faz uma PRÉ-ANÁLISE automática dos "
+            "critérios de um benefício. NÃO é uma confirmação de elegibilidade: só o RH confirma, "
+            "depois de analisar a documentação. Use quando o colaborador perguntar se TEM DIREITO a "
+            "um benefício específico (não para saber as regras gerais: isso é "
+            "consultar_regra_beneficio). Sempre que usar esta ferramenta, informe o resultado da "
+            "pré-análise como indicativo e escale/oriente o colaborador a confirmar com o RH — nunca "
+            "afirme elegibilidade definitiva com base só nela."
+        ),
+        "parametros": {
+                    "type": "object",
+                    "properties": {
+                        "colaborador_id": {"type": "string", "maxLength": 10,
+                                            "description": "O ID do colaborador no sistema de RH."},
+                        "beneficio": {"type": "string", "enum": ["vale_refeicao", "plano_de_saude", "auxilio_creche"],
+                                        "description": "O benefício para o qual verificar a elegibilidade."},
+                    },
+                    "required": ["colaborador_id", "beneficio"],
+                    "additionalProperties": False,
+                },
+        "saida": ["colaborador_id", "beneficio", "dependentes", "beneficios_ativos", "pre_analise", "criterios_verificados", "aviso"],
     },
 }
 
