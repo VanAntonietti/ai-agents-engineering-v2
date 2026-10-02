@@ -81,17 +81,85 @@ def normalizar(texto: str) -> str:
 #   3. filtrar (normalizar() ajuda)
 #   4. devolver {"resultados": [...], ...}
 # ======================================================================
-def consultar_rede_credenciada(cidade: str) -> dict:
-    raise NotImplementedError("TODO 4a: implemente consultar_rede_credenciada em nova_ferramenta.py")
+def consultar_rede_credenciada(cidade: str, especialidade: str = "", somente_24h: bool = False) -> dict:
+    """Busca prestadores ativos da rede credenciada numa cidade.
+
+    'especialidade' (opcional) filtra por tipo/especialidade (ex.: "laboratório",
+    "pronto-socorro", "exames de sangue"), comparando texto normalizado. 'somente_24h'
+    filtra só quem atende 24 horas. Prestadores descredenciados ou em negociação nunca
+    voltam. Colunas comerciais/internas (código da operadora, valor negociado,
+    observação interna) nunca voltam ao modelo.
+    """
+    cidade_norm = normalizar(cidade)
+    especialidade_norm = normalizar(especialidade)
+
+    bruto = SHEETS.ler(PLANILHA_ID, ABA)
+    cabecalho = bruto["values"][0]
+    linhas = [dict(zip(cabecalho, linha)) for linha in bruto["values"][1:]]
+
+    encontrados = []
+    for linha in linhas:
+        if normalizar(linha.get("cidade", "")) != cidade_norm:
+            continue
+        if normalizar(linha.get("situacao", "")) != "ativo":
+            continue
+        if especialidade_norm:
+            alvo = normalizar(linha.get("tipo", "")) + " " + normalizar(linha.get("especialidades", ""))
+            if especialidade_norm not in alvo:
+                continue
+        if somente_24h and normalizar(linha.get("atende_24h", "")) not in ("sim",):
+            continue
+        encontrados.append({
+            "prestador": linha["prestador"],
+            "tipo": linha["tipo"],
+            "especialidades": linha["especialidades"],
+            "cidade": linha["cidade"],
+            "uf": linha["uf"],
+            "bairro": linha["bairro"],
+            "telefone": linha["telefone"],
+            "atende_24h": normalizar(linha.get("atende_24h", "")) == "sim",
+        })
+
+    if not encontrados:
+        raise ErroDeFerramenta(
+            "prestador_nao_encontrado",
+            "Nenhum prestador ativo encontrado com esses critérios.",
+            recebido={"cidade": cidade, "especialidade": especialidade, "somente_24h": somente_24h},
+            como_corrigir="tentar sem 'especialidade', ou confirmar o nome da cidade com o colaborador",
+            recuperavel=True,
+        )
+
+    return {"resultados": encontrados[:10], "fonte": PLANILHA_ID}
 
 
 # ======================================================================
 # TODO 4b — o contrato (mesmo formato de contratos.py)
 # ======================================================================
 CONTRATO = {
-    "descricao": "TODO 4",
-    "parametros": None,
-    "saida": None,
+    "descricao": (
+        "Busca prestadores (hospitais, clínicas, laboratórios, pronto-socorros) que atendem pelo "
+        "plano de saúde numa cidade, na planilha da rede credenciada. Devolve só prestadores ativos "
+        "(nunca descredenciados nem em negociação). Use 'especialidade' para filtrar por tipo de "
+        "atendimento (ex.: 'laboratório', 'pronto-socorro', 'exames de sangue', 'pediatria') e "
+        "'somente_24h' quando o colaborador precisar de atendimento 24 horas. "
+        "Use antes de responder qualquer dúvida sobre onde atender pelo plano. "
+        "Não use para saber o valor ou as regras do plano de saúde em si: isso é "
+        "consultar_regra_beneficio."
+    ),
+    "parametros": {
+        "type": "object",
+        "properties": {
+            "cidade": {"type": "string", "maxLength": 100,
+                       "description": "A cidade onde o colaborador quer ser atendido."},
+            "especialidade": {"type": "string", "maxLength": 100,
+                               "description": "Tipo de prestador ou especialidade buscada (opcional)."},
+            "somente_24h": {"type": "boolean",
+                             "description": "Se true, devolve só quem atende 24 horas. Padrão: false."},
+        },
+        "required": ["cidade"],
+        "additionalProperties": False,
+    },
+    "saida": ["prestador", "tipo", "especialidades", "cidade", "uf", "bairro", "telefone", "atende_24h", "fonte"],
 }
 
 
