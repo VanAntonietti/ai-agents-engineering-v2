@@ -17,18 +17,15 @@ from politica_de_resposta import FORMATO_JSON, REGRAS
 
 CATEGORIAS = ("rh", "ti", "beneficios", "elegibilidade")
 
+PROMPT_CLASSIFICADOR = """Classifique a dúvida de um colaborador em UMA destas categorias:
 
-# --------------------------------------------------------------------------
-# TODO 1 — o classificador
-#
-# Escreva o prompt de sistema que faz o modelo responder com UMA das
-# CATEGORIAS acima, e nada mais. Dicas:
-#   - diga o que entra em cada categoria (ex.: "ti: notebook, senha, VPN...");
-#   - "elegibilidade" é quando a pessoa pergunta se ELA tem direito a algo;
-#   - peça a resposta em minúsculas, sem pontuação.
-# --------------------------------------------------------------------------
-PROMPT_CLASSIFICADOR = """
-(escreva aqui)
+- ti: notebook, senha, Windows, computador travado, VPN, e-mail, acesso a sistemas
+- rh: salário, folha de pagamento, férias, ponto, demissão, promoção, contrato
+- beneficios: vale transporte, vale refeição, plano de saúde, auxílio creche, gympass
+- elegibilidade: quando a pessoa pergunta se ELA tem direito a algo
+  ("eu tenho direito a...", "posso pedir...", "eu me encaixo em...")
+
+Responda só com o nome da categoria, em minúsculas, sem pontuação e sem explicação.
 """
 
 
@@ -37,26 +34,25 @@ def classificar(pergunta: str) -> str:
                              sistema=PROMPT_CLASSIFICADOR, max_tokens=10)
     categoria = resposta.texto.strip().lower()
 
-    # TODO 1 (continuação): e se o modelo responder algo fora de CATEGORIAS?
-    # Decida um comportamento padrão e devolva sempre uma categoria válida.
-    raise NotImplementedError("TODO 1: trate a resposta do classificador em arquitetura_b.py")
+    # O modelo pode responder algo fora das CATEGORIAS ("beneficios." ou uma frase).
+    for valida in CATEGORIAS:
+        if valida in categoria:
+            return valida
+    return "todos"  # padrão: não sabemos o tema, então buscamos no corpus inteiro
 
 
 def resolver(pergunta: str) -> Resultado:
     categoria = classificar(pergunta)
 
-    # ----------------------------------------------------------------------
-    # TODO 2 — o roteamento
-    #
-    # a) Se a categoria for "elegibilidade", devolva direto:
-    #        Resultado("escalar", [], "texto explicando que o RH vai analisar")
-    #    (repare: esse caminho nem chama o modelo)
-    #
-    # b) Senão, busque os documentos do tema:   docs = buscar(categoria, pergunta)
-    #    Se não vier nenhum documento, devolva Resultado("nao_sei", [], "...").
-    #
-    # c) Monte o prompt de sistema com REGRAS, FORMATO_JSON e os documentos
-    #    (veja como a arquitetura_a.py faz com formatar), chame o modelo
-    #    e devolva Resultado.de_json(resposta.texto).
-    # ----------------------------------------------------------------------
-    raise NotImplementedError("TODO 2: escreva o roteamento em arquitetura_b.py")
+    if categoria == "elegibilidade":
+        return Resultado("escalar", [], "O RH vai analisar sua solicitação.")
+
+    docs = buscar(categoria, pergunta)
+    if not docs:
+        return Resultado("nao_sei", [], "Não encontrei documentos sobre isso.")
+
+    sistema = (f"{REGRAS}\n\n{FORMATO_JSON}\n\nDocumentos disponíveis:\n\n"
+               + "\n\n".join(formatar(doc) for doc in docs))
+
+    resposta = modelo.chamar([modelo.mensagem_do_usuario(pergunta)], sistema=sistema)
+    return Resultado.de_json(resposta.texto)
